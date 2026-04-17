@@ -1,0 +1,8 @@
+/bin/
+/out/
+/vendor/
+*.test
+*.out
+.DS_Store
+.idea/
+.vscode/

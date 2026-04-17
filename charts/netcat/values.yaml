@@ -1,0 +1,174 @@
+# ============================================================================
+# netcat - multi-cluster connectivity probe
+# ============================================================================
+# Typical install patterns:
+#
+# 1. Kubeconfig mode (controller reaches agents via each cluster's API server)
+#    - In every source cluster:     agent.enabled=true,  controller.enabled=false
+#    - In the hub cluster:           agent.enabled=false, controller.enabled=true
+#      Populate the netcat-kubeconfigs Secret yourself (see README).
+#
+# 2. Hub mode (agents dial OUT to the controller; NO kubeconfigs needed)
+#    - In every source cluster:     agent.enabled=true, agent.hub.enabled=true
+#                                   (set agent.hub.url and agent.hub.token)
+#    - In the hub cluster:           controller.enabled=true,
+#                                   controller.hub.enabled=true
+#                                   (matching controller.hub.token)
+#
+# 3. Both in the SAME cluster for testing:
+#    agent.enabled=true, controller.enabled=true (either mode).
+# ============================================================================
+
+nameOverride: ""
+fullnameOverride: ""
+
+namespace:
+  create: false           # If true, this chart creates the namespace.
+  name: netcat
+
+image:
+  registry: ghcr.io/kavian
+  agentRepository: netcat-agent
+  controllerRepository: netcat-controller
+  tag: ""                 # Defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+commonLabels: {}
+
+# ---------------------------------------------------------------------------
+# Agent (DaemonSet) — deploy to EVERY cluster you want to probe from.
+# ---------------------------------------------------------------------------
+agent:
+  enabled: true
+
+  # hostNetwork makes probes originate from the node's real NIC, which
+  # is what you want for "can this node reach X?".
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+
+  # Bind agent port on the node. Set to 0 to skip hostPort entirely;
+  # pod-proxy still works without it.
+  hostPort: 8080
+
+  port: 8080
+  listenAddr: ":8080"
+
+  # Run on control-plane nodes too.
+  tolerateAll: true
+
+  # Extra tolerations / nodeSelector / affinity if you need them.
+  tolerations: []
+  nodeSelector: {}
+  affinity: {}
+
+  # Let the controller reach this cluster through kubeconfig mode.
+  # Creates a minimal-privilege ServiceAccount on remote clusters that
+  # you can mint a kubeconfig from.
+  remoteAccess:
+    enabled: false
+    serviceAccountName: netcat-remote
+    createTokenSecret: true   # static SA token (for building kubeconfigs)
+
+  resources:
+    requests: { cpu: "10m", memory: "16Mi" }
+    limits:   { cpu: "100m", memory: "64Mi" }
+
+  podAnnotations: {}
+  priorityClassName: ""
+
+  # ---------- Hub mode (agent → controller reverse tunnel) ----------------
+  # Enable this if you DO NOT want to give the controller a kubeconfig
+  # for this cluster. The agent will dial OUT to `url`.
+  hub:
+    enabled: false
+    url: ""                 # e.g. https://netcat.example.com
+    cluster: ""             # display name of this cluster in the UI
+    # Provide the token inline OR reference an existing Secret.
+    token: ""
+    existingSecret: ""      # Secret containing key `token`
+    existingSecretKey: token
+
+# ---------------------------------------------------------------------------
+# Controller (Deployment + UI) — deploy to ONE hub cluster.
+# ---------------------------------------------------------------------------
+controller:
+  enabled: false
+
+  replicaCount: 1
+  port: 8080
+  listenAddr: ":8080"
+
+  localClusterName: local
+  agentNamespace: ""        # defaults to .Release.Namespace / .Values.namespace.name
+  agentLabel: "app={{ include \"netcat.agentName\" . }}"
+  agentPort: 8080
+  probeTimeoutMs: 3000
+  httpTimeoutMs: 8000
+
+  # -------- Kubeconfig mode (reaches agents via API-server pod-proxy) -----
+  kubeconfig:
+    enabled: true
+    # Name of the Secret holding one kubeconfig per remote cluster.
+    # You create and populate this Secret yourself (see README).
+    # If it doesn't exist at install time the volume mount is optional.
+    secretName: netcat-kubeconfigs
+    mountPath: /etc/netcat/kubeconfigs
+
+  # -------- Hub mode (accepts inbound agent connections) ------------------
+  hub:
+    enabled: false
+    token: ""                 # must match agent.hub.token
+    existingSecret: ""        # Secret containing key `token`
+    existingSecretKey: token
+
+  resources:
+    requests: { cpu: "25m", memory: "48Mi" }
+    limits:   { cpu: "500m", memory: "256Mi" }
+
+  podAnnotations: {}
+  priorityClassName: ""
+
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+
+  # -------- Exposure: HTTPRoute (preferred, Gateway API) -------------------
+  # Requires the Gateway API CRDs (gateway.networking.k8s.io/v1) installed
+  # in the cluster and a Gateway already created. Leave parentRefs empty
+  # and set httpRoute.enabled=false if you don't have a Gateway yet.
+  httpRoute:
+    enabled: true
+    # Reference one or more existing Gateways. Example:
+    #   parentRefs:
+    #     - name: gateway
+    #       namespace: gateway
+    #       sectionName: https
+    parentRefs:
+      - name: gateway
+        namespace: gateway
+    hostnames:
+      - netcat.example.com
+    annotations: {}
+    # Each rule produces one HTTPRoute rule with a single backendRef
+    # pointing at the controller Service.
+    rules:
+      - matches:
+          - path:
+              type: PathPrefix
+              value: /
+        # filters: []
+        # timeouts:
+        #   request: 30s
+
+  # -------- Exposure: Ingress (fallback) -----------------------------------
+  ingress:
+    enabled: false
+    className: ""
+    host: netcat.example.com
+    path: /
+    pathType: Prefix
+    annotations: {}
+    tls: false
+    tlsSecretName: ""

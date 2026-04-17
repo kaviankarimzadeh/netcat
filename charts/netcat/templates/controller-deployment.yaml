@@ -1,0 +1,95 @@
+{{- if .Values.controller.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "netcat.controllerName" . }}
+  namespace: {{ include "netcat.namespace" . }}
+  labels:
+    {{- include "netcat.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+    app: {{ include "netcat.controllerName" . }}
+spec:
+  replicas: {{ .Values.controller.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "netcat.controllerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "netcat.controllerSelectorLabels" . | nindent 8 }}
+      {{- with .Values.controller.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "netcat.controllerName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.controller.priorityClassName }}
+      priorityClassName: {{ .Values.controller.priorityClassName }}
+      {{- end }}
+      containers:
+        - name: controller
+          image: {{ include "netcat.controllerImage" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: LISTEN_ADDR
+              value: {{ .Values.controller.listenAddr | quote }}
+            - name: AGENT_NAMESPACE
+              value: {{ include "netcat.agentNamespace" . | quote }}
+            - name: AGENT_LABEL
+              value: {{ tpl .Values.controller.agentLabel . | quote }}
+            - name: AGENT_PORT
+              value: {{ .Values.controller.agentPort | quote }}
+            - name: LOCAL_CLUSTER_NAME
+              value: {{ .Values.controller.localClusterName | quote }}
+            - name: PROBE_TIMEOUT_MS
+              value: {{ .Values.controller.probeTimeoutMs | quote }}
+            - name: HTTP_TIMEOUT_MS
+              value: {{ .Values.controller.httpTimeoutMs | quote }}
+            {{- if .Values.controller.kubeconfig.enabled }}
+            - name: KUBECONFIG_DIR
+              value: {{ .Values.controller.kubeconfig.mountPath | quote }}
+            {{- end }}
+            {{- if .Values.controller.hub.enabled }}
+            - name: HUB_ENABLED
+              value: "true"
+            - name: HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-hub" (include "netcat.controllerName" .)) .Values.controller.hub.existingSecret }}
+                  key:  {{ default "token" .Values.controller.hub.existingSecretKey }}
+                  optional: true
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.controller.port }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: {{ .Values.controller.port }} }
+          livenessProbe:
+            httpGet: { path: /healthz, port: {{ .Values.controller.port }} }
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.controller.resources | nindent 12 }}
+          {{- if .Values.controller.kubeconfig.enabled }}
+          volumeMounts:
+            - name: kubeconfigs
+              mountPath: {{ .Values.controller.kubeconfig.mountPath }}
+              readOnly: true
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop: ["ALL"]
+      {{- if .Values.controller.kubeconfig.enabled }}
+      volumes:
+        - name: kubeconfigs
+          secret:
+            secretName: {{ .Values.controller.kubeconfig.secretName }}
+            optional: true
+      {{- end }}
+{{- end }}

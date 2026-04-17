@@ -1,0 +1,99 @@
+{{- if .Values.agent.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "netcat.agentName" . }}
+  namespace: {{ include "netcat.namespace" . }}
+  labels:
+    {{- include "netcat.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agent
+    app: {{ include "netcat.agentName" . }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "netcat.agentSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "netcat.agentSelectorLabels" . | nindent 8 }}
+      {{- with .Values.agent.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "netcat.agentName" . }}
+      hostNetwork: {{ .Values.agent.hostNetwork }}
+      dnsPolicy: {{ .Values.agent.dnsPolicy }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.agent.priorityClassName }}
+      priorityClassName: {{ .Values.agent.priorityClassName }}
+      {{- end }}
+      {{- if .Values.agent.tolerateAll }}
+      tolerations:
+        - operator: Exists
+      {{- else }}
+        {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: agent
+          image: {{ include "netcat.agentImage" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: LISTEN_ADDR
+              value: {{ .Values.agent.listenAddr | quote }}
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- if .Values.agent.hub.enabled }}
+            - name: HUB_URL
+              value: {{ .Values.agent.hub.url | quote }}
+            - name: HUB_CLUSTER
+              value: {{ required "agent.hub.cluster is required when agent.hub.enabled=true" .Values.agent.hub.cluster | quote }}
+            - name: HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-hub" (include "netcat.agentName" .)) .Values.agent.hub.existingSecret }}
+                  key:  {{ default "token" .Values.agent.hub.existingSecretKey }}
+                  optional: true
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.agent.port }}
+              {{- if gt (int .Values.agent.hostPort) 0 }}
+              hostPort: {{ .Values.agent.hostPort }}
+              {{- end }}
+              protocol: TCP
+          readinessProbe:
+            httpGet: { path: /healthz, port: {{ .Values.agent.port }} }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: {{ .Values.agent.port }} }
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop: ["ALL"]
+{{- end }}

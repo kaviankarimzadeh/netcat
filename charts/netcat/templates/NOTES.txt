@@ -1,0 +1,41 @@
+netcat {{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in namespace "{{ include "netcat.namespace" . }}".
+
+{{- if .Values.agent.enabled }}
+
+AGENT (DaemonSet): {{ include "netcat.agentName" . }}
+  image:        {{ include "netcat.agentImage" . }}
+  hostNetwork:  {{ .Values.agent.hostNetwork }}
+  {{- if .Values.agent.hub.enabled }}
+  mode:         HUB (dials out to {{ .Values.agent.hub.url }} as cluster={{ .Values.agent.hub.cluster }})
+  {{- else }}
+  mode:         KUBECONFIG (reachable via API-server pod-proxy)
+  {{- end }}
+{{- end }}
+
+{{- if .Values.controller.enabled }}
+
+CONTROLLER: {{ include "netcat.controllerName" . }}
+  image:   {{ include "netcat.controllerImage" . }}
+  service: {{ include "netcat.controllerName" . }}.{{ include "netcat.namespace" . }}.svc:{{ .Values.controller.service.port }}
+
+  Modes:
+  {{- if .Values.controller.kubeconfig.enabled }}
+    - kubeconfig   (reads kubeconfigs from Secret "{{ .Values.controller.kubeconfig.secretName }}")
+  {{- end }}
+  {{- if .Values.controller.hub.enabled }}
+    - hub          (accepts agent connections on /api/agent/stream)
+  {{- end }}
+
+  Try the UI with:
+  {{- if .Values.controller.httpRoute.enabled }}
+    # via HTTPRoute (Gateway API):
+    {{- range .Values.controller.httpRoute.hostnames }}
+    open https://{{ . }}
+    {{- end }}
+  {{- else if .Values.controller.ingress.enabled }}
+    open http{{ if .Values.controller.ingress.tls }}s{{ end }}://{{ .Values.controller.ingress.host }}
+  {{- else }}
+    kubectl -n {{ include "netcat.namespace" . }} port-forward svc/{{ include "netcat.controllerName" . }} 8080:{{ .Values.controller.service.port }}
+    open http://localhost:8080
+  {{- end }}
+{{- end }}

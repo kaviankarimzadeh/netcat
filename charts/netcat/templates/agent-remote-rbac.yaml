@@ -1,0 +1,51 @@
+{{- if and .Values.agent.enabled .Values.agent.remoteAccess.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.agent.remoteAccess.serviceAccountName }}
+  namespace: {{ include "netcat.namespace" . }}
+  labels:
+    {{- include "netcat.labels" . | nindent 4 }}
+---
+{{- if .Values.agent.remoteAccess.createTokenSecret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.agent.remoteAccess.serviceAccountName }}-token
+  namespace: {{ include "netcat.namespace" . }}
+  annotations:
+    kubernetes.io/service-account.name: {{ .Values.agent.remoteAccess.serviceAccountName }}
+  labels:
+    {{- include "netcat.labels" . | nindent 4 }}
+type: kubernetes.io/service-account-token
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "netcat.fullname" . }}-remote
+  labels:
+    {{- include "netcat.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/proxy"]
+    verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "netcat.fullname" . }}-remote
+  labels:
+    {{- include "netcat.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "netcat.fullname" . }}-remote
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.agent.remoteAccess.serviceAccountName }}
+    namespace: {{ include "netcat.namespace" . }}
+{{- end }}

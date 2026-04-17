@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>netcat · multi-cluster connectivity</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body class="min-h-screen text-slate-100">
+    <div class="bg-aurora fixed inset-0 -z-10"></div>
+
+    <main class="mx-auto max-w-6xl px-6 py-10">
+      <header class="mb-10 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-400 to-fuchsia-500 shadow-lg shadow-fuchsia-500/30"></div>
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight">netcat</h1>
+            <p class="text-sm text-slate-400">multi-cluster node-level connectivity probe</p>
+          </div>
+        </div>
+        <div id="clusterChips" class="flex flex-wrap gap-2"></div>
+      </header>
+
+      <section class="glass rounded-2xl p-6 shadow-2xl shadow-black/30">
+        <form id="probeForm" class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_160px_120px_auto]">
+          <div>
+            <label class="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-400">Host / IP</label>
+            <input
+              id="host"
+              name="host"
+              required
+              autocomplete="off"
+              placeholder="api.example.com"
+              class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-slate-100 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-400">Port</label>
+            <input
+              id="port"
+              name="port"
+              type="number"
+              min="1"
+              max="65535"
+              required
+              value="443"
+              class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-slate-100 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40"
+            />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-medium uppercase tracking-wider text-slate-400">Protocol</label>
+            <select
+              id="proto"
+              name="proto"
+              class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-slate-100 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40"
+            >
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <button
+              id="runBtn"
+              type="submit"
+              class="w-full rounded-xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 px-6 py-3 font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50 md:w-auto"
+            >
+              Probe
+            </button>
+          </div>
+        </form>
+
+        <div id="summary" class="mt-6 hidden grid-cols-2 gap-4 md:grid-cols-4">
+          <div class="stat"><div class="stat-label">Targets</div><div id="statTargets" class="stat-value">0</div></div>
+          <div class="stat"><div class="stat-label">Success</div><div id="statOk" class="stat-value text-emerald-400">0</div></div>
+          <div class="stat"><div class="stat-label">Failed</div><div id="statFail" class="stat-value text-rose-400">0</div></div>
+          <div class="stat"><div class="stat-label">Avg latency</div><div id="statLatency" class="stat-value">—</div></div>
+        </div>
+      </section>
+
+      <section id="results" class="mt-8 space-y-6"></section>
+
+      <footer class="mt-12 text-center text-xs text-slate-500">
+        probes run from the node's host network · TCP uses connect() · UDP is best-effort
+      </footer>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

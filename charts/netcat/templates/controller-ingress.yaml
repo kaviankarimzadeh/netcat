@@ -1,0 +1,36 @@
+{{- if and .Values.controller.enabled .Values.controller.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "netcat.controllerName" . }}
+  namespace: {{ include "netcat.namespace" . }}
+  labels:
+    {{- include "netcat.labels" . | nindent 4 }}
+  {{- with .Values.controller.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.controller.ingress.className }}
+  ingressClassName: {{ .Values.controller.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.controller.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.controller.ingress.path }}
+            pathType: {{ .Values.controller.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "netcat.controllerName" . }}
+                port:
+                  number: {{ .Values.controller.service.port }}
+  {{- if .Values.controller.ingress.tls }}
+  tls:
+    - hosts:
+        - {{ .Values.controller.ingress.host | quote }}
+      {{- if .Values.controller.ingress.tlsSecretName }}
+      secretName: {{ .Values.controller.ingress.tlsSecretName }}
+      {{- end }}
+  {{- end }}
+{{- end }}
