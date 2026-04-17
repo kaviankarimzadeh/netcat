@@ -18,9 +18,8 @@
 nameOverride: ""
 fullnameOverride: ""
 
-namespace:
-  create: false           # If true, this chart creates the namespace.
-  name: netcat
+# The namespace comes from `helm install --namespace`. Create it with
+# `--create-namespace` if it doesn't exist, or manage it separately.
 
 image:
   registry: kaviankarimzadeh

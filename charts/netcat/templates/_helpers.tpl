@@ -16,7 +16,7 @@
 {{- define "netcat.controllerName" -}}{{ include "netcat.fullname" . }}-controller{{- end -}}
 
 {{- define "netcat.namespace" -}}
-{{- default .Release.Namespace .Values.namespace.name -}}
+{{- .Release.Namespace -}}
 {{- end -}}
 
 {{/* ----- labels ----- */}}
@@ -60,8 +60,3 @@ app: {{ include "netcat.controllerName" . }}
 {{- printf "%s/%s:%s" .Values.image.registry .Values.image.controllerRepository $tag -}}
 {{- end -}}
 
-{{/* ----- misc ----- */}}
-
-{{- define "netcat.agentNamespace" -}}
-{{- default (include "netcat.namespace" .) .Values.controller.agentNamespace -}}
-{{- end -}}
