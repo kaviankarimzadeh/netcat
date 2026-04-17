@@ -187,10 +187,14 @@ func (s *server) handleCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleUI(w http.ResponseWriter, r *http.Request) {
-	sub, _ := fs.Sub(webFS, "web")
-	if r.URL.Path == "/" {
-		r.URL.Path = "/index.html"
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		http.Error(w, "web assets missing: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
+	// http.FileServer already serves index.html for a directory request
+	// (including "/"). Rewriting to /index.html here would trigger its
+	// built-in redirect back to "./", causing a client loop.
 	http.FileServer(http.FS(sub)).ServeHTTP(w, r)
 }
 

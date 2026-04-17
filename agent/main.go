@@ -301,6 +301,10 @@ func main() {
 
 	hubURL := os.Getenv("HUB_URL")
 	if hubURL != "" {
+		u, err := url.Parse(hubURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			log.Fatalf("HUB_URL must be a full URL with scheme (http:// or https://), got %q", hubURL)
+		}
 		cluster := os.Getenv("HUB_CLUSTER")
 		if cluster == "" {
 			cluster = "unknown"

@@ -63,8 +63,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            {{- $hubURL := required "agent.hub.url is required" .Values.agent.hub.url }}
+            {{- if not (or (hasPrefix "http://" $hubURL) (hasPrefix "https://" $hubURL)) }}
+              {{- fail (printf "agent.hub.url must include scheme (http:// or https://), got: %s" $hubURL) }}
+            {{- end }}
             - name: HUB_URL
-              value: {{ required "agent.hub.url is required" .Values.agent.hub.url | quote }}
+              value: {{ $hubURL | quote }}
             - name: HUB_CLUSTER
               value: {{ required "agent.hub.cluster is required" .Values.agent.hub.cluster | quote }}
             {{- if or .Values.agent.hub.token .Values.agent.hub.existingSecret }}
