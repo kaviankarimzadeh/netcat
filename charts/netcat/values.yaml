@@ -27,37 +27,22 @@ namespace:
   name: netcat
 
 image:
-  registry: ghcr.io/kavian
+  registry: kaviankarimzadeh
   agentRepository: netcat-agent
   controllerRepository: netcat-controller
-  tag: ""                 # Defaults to .Chart.AppVersion when empty
+  tag: v0.0.1
   pullPolicy: IfNotPresent
   pullSecrets: []
-
 commonLabels: {}
-
-# ---------------------------------------------------------------------------
-# Agent (DaemonSet) — deploy to EVERY cluster you want to probe from.
-# ---------------------------------------------------------------------------
 agent:
   enabled: true
-
-  # hostNetwork makes probes originate from the node's real NIC, which
-  # is what you want for "can this node reach X?".
   hostNetwork: true
   dnsPolicy: ClusterFirstWithHostNet
-
-  # Bind agent port on the node. Set to 0 to skip hostPort entirely;
-  # pod-proxy still works without it.
   hostPort: 8080
-
   port: 8080
   listenAddr: ":8080"
 
-  # Run on control-plane nodes too.
   tolerateAll: true
-
-  # Extra tolerations / nodeSelector / affinity if you need them.
   tolerations: []
   nodeSelector: {}
   affinity: {}

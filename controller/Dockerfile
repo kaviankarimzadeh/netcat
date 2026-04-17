@@ -11,7 +11,7 @@ COPY controller/ ./controller/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -trimpath -o /out/netcat-controller ./controller
 
-FROM --platform=linux/amd64 gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/netcat-controller /netcat-controller
 USER 65532:65532
 EXPOSE 8080

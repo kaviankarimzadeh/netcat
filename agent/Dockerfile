@@ -11,7 +11,7 @@ COPY agent/ ./agent/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -trimpath -o /out/netcat-agent ./agent
 
-FROM --platform=linux/amd64 gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/netcat-agent /netcat-agent
 USER 65532:65532
 EXPOSE 8080
