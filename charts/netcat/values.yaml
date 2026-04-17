@@ -25,7 +25,7 @@ image:
   registry: kaviankarimzadeh
   agentRepository: netcat-agent
   controllerRepository: netcat-controller
-  tag: v0.0.2
+  tag: ""                 # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
   pullSecrets: []
 
