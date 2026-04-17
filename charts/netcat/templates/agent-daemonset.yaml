@@ -63,17 +63,16 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            {{- if .Values.agent.hub.enabled }}
             - name: HUB_URL
-              value: {{ .Values.agent.hub.url | quote }}
+              value: {{ required "agent.hub.url is required" .Values.agent.hub.url | quote }}
             - name: HUB_CLUSTER
-              value: {{ required "agent.hub.cluster is required when agent.hub.enabled=true" .Values.agent.hub.cluster | quote }}
+              value: {{ required "agent.hub.cluster is required" .Values.agent.hub.cluster | quote }}
+            {{- if or .Values.agent.hub.token .Values.agent.hub.existingSecret }}
             - name: HUB_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ default (printf "%s-hub" (include "netcat.agentName" .)) .Values.agent.hub.existingSecret }}
                   key:  {{ default "token" .Values.agent.hub.existingSecretKey }}
-                  optional: true
             {{- end }}
           ports:
             - name: http

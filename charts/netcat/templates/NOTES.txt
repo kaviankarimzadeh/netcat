@@ -3,13 +3,9 @@ netcat {{ .Chart.AppVersion }} installed as release "{{ .Release.Name }}" in nam
 {{- if .Values.agent.enabled }}
 
 AGENT (DaemonSet): {{ include "netcat.agentName" . }}
-  image:        {{ include "netcat.agentImage" . }}
-  hostNetwork:  {{ .Values.agent.hostNetwork }}
-  {{- if .Values.agent.hub.enabled }}
-  mode:         HUB (dials out to {{ .Values.agent.hub.url }} as cluster={{ .Values.agent.hub.cluster }})
-  {{- else }}
-  mode:         KUBECONFIG (reachable via API-server pod-proxy)
-  {{- end }}
+  image:       {{ include "netcat.agentImage" . }}
+  cluster:     {{ .Values.agent.hub.cluster }}
+  dials out to {{ .Values.agent.hub.url }}
 {{- end }}
 
 {{- if .Values.controller.enabled }}
@@ -18,17 +14,8 @@ CONTROLLER: {{ include "netcat.controllerName" . }}
   image:   {{ include "netcat.controllerImage" . }}
   service: {{ include "netcat.controllerName" . }}.{{ include "netcat.namespace" . }}.svc:{{ .Values.controller.service.port }}
 
-  Modes:
-  {{- if .Values.controller.kubeconfig.enabled }}
-    - kubeconfig   (reads kubeconfigs from Secret "{{ .Values.controller.kubeconfig.secretName }}")
-  {{- end }}
-  {{- if .Values.controller.hub.enabled }}
-    - hub          (accepts agent connections on /api/agent/stream)
-  {{- end }}
-
-  Try the UI with:
+  Reach the UI:
   {{- if .Values.controller.httpRoute.enabled }}
-    # via HTTPRoute (Gateway API):
     {{- range .Values.controller.httpRoute.hostnames }}
     open https://{{ . }}
     {{- end }}

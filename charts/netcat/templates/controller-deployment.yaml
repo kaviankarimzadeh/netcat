@@ -37,31 +37,16 @@ spec:
           env:
             - name: LISTEN_ADDR
               value: {{ .Values.controller.listenAddr | quote }}
-            - name: AGENT_NAMESPACE
-              value: {{ include "netcat.agentNamespace" . | quote }}
-            - name: AGENT_LABEL
-              value: {{ tpl .Values.controller.agentLabel . | quote }}
-            - name: AGENT_PORT
-              value: {{ .Values.controller.agentPort | quote }}
-            - name: LOCAL_CLUSTER_NAME
-              value: {{ .Values.controller.localClusterName | quote }}
             - name: PROBE_TIMEOUT_MS
               value: {{ .Values.controller.probeTimeoutMs | quote }}
-            - name: HTTP_TIMEOUT_MS
-              value: {{ .Values.controller.httpTimeoutMs | quote }}
-            {{- if .Values.controller.kubeconfig.enabled }}
-            - name: KUBECONFIG_DIR
-              value: {{ .Values.controller.kubeconfig.mountPath | quote }}
-            {{- end }}
-            {{- if .Values.controller.hub.enabled }}
-            - name: HUB_ENABLED
-              value: "true"
+            - name: AGENT_TIMEOUT_MS
+              value: {{ .Values.controller.agentTimeoutMs | quote }}
+            {{- if or .Values.controller.hub.token .Values.controller.hub.existingSecret }}
             - name: HUB_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ default (printf "%s-hub" (include "netcat.controllerName" .)) .Values.controller.hub.existingSecret }}
                   key:  {{ default "token" .Values.controller.hub.existingSecretKey }}
-                  optional: true
             {{- end }}
           ports:
             - name: http
@@ -73,23 +58,10 @@ spec:
             periodSeconds: 30
           resources:
             {{- toYaml .Values.controller.resources | nindent 12 }}
-          {{- if .Values.controller.kubeconfig.enabled }}
-          volumeMounts:
-            - name: kubeconfigs
-              mountPath: {{ .Values.controller.kubeconfig.mountPath }}
-              readOnly: true
-          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
             runAsUser: 65532
             capabilities:
               drop: ["ALL"]
-      {{- if .Values.controller.kubeconfig.enabled }}
-      volumes:
-        - name: kubeconfigs
-          secret:
-            secretName: {{ .Values.controller.kubeconfig.secretName }}
-            optional: true
-      {{- end }}
 {{- end }}

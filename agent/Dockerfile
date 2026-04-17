@@ -5,8 +5,7 @@ FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
+COPY go.mod ./
 COPY agent/ ./agent/
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -trimpath -o /out/netcat-agent ./agent

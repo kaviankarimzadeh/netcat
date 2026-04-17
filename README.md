@@ -11,135 +11,94 @@ It ships as two binaries:
 | `agent`      | DaemonSet with `hostNetwork: true`   | Every node of every cluster you want to probe |
 | `controller` | Deployment + web UI (SSE streaming)  | One "hub" cluster                             |
 
-It supports **two deployment modes**, which you can mix and match:
-
-1. **Kubeconfig mode** — the controller reaches each agent through the
-   Kubernetes API server's pod-proxy. Give the controller a kubeconfig
-   per cluster; no cross-cluster networking needed.
-2. **Hub mode** — agents dial **out** to the controller and keep an SSE
-   connection open. No kubeconfigs, no API-server access from the
-   controller side. Just outbound HTTPS from the agents to a single
-   URL. Ideal for clusters behind NAT, strict egress, or when you
-   simply don't want to manage kubeconfigs.
+Agents dial **out** to the controller and keep a persistent SSE
+connection open. The controller pushes probe jobs down that tunnel;
+agents POST the results back. No kubeconfigs, no API-server access
+across clusters, no cross-cluster networking — just outbound HTTPS
+from the agent pods to a single URL, authenticated with a shared
+bearer token.
 
 ```
-  Kubeconfig mode                      Hub mode
-  ───────────────                      ────────
-
-         Browser                         Browser
-           │                               │
-           ▼                               ▼
-      controller ──kubeconfig──┐      controller ◄──SSE── agents
-           │                    │           ▲              (dial out
-      pods/proxy            pods/proxy      │               from every
-           │                    │           │               cluster)
-      agents (DS)           agents (DS)     │
-                                       (no K8s creds,
-                                        just one shared
-                                        bearer token)
+                Browser
+                   │
+                   ▼
+              controller  ◄── SSE ── agents (DaemonSet)
+               (UI + hub)                  in every cluster
+                                           dialing OUT over HTTPS
+                                           with a shared bearer token
 ```
 
 ## Install with Helm
 
-A single chart ships both components, toggled with flags.
+One chart, two install invocations.
 
-### Hub mode (no kubeconfigs — recommended)
+### 1. Generate a shared token
 
-On the **hub** cluster (controller + UI):
+```bash
+export NETCAT_TOKEN=$(openssl rand -base64 32)
+```
+
+### 2. Install the controller on the hub cluster
 
 ```bash
 helm install netcat ./charts/netcat \
   --namespace netcat --create-namespace \
   --set agent.enabled=false \
   --set controller.enabled=true \
-  --set controller.kubeconfig.enabled=false \
-  --set controller.hub.enabled=true \
-  --set controller.hub.token=$SHARED_TOKEN \
+  --set controller.hub.token="$NETCAT_TOKEN" \
   --set-json 'controller.httpRoute.parentRefs=[{"name":"gateway","namespace":"gateway"}]' \
   --set-json 'controller.httpRoute.hostnames=["netcat.example.com"]'
 ```
 
-> HTTPRoute is enabled by default. If you don't have the Gateway API
-> installed or would rather use an Ingress, disable HTTPRoute and enable
-> Ingress instead (see [Exposing the UI](#exposing-the-ui) below).
+> HTTPRoute (Gateway API v1) is the default. If your cluster doesn't
+> run the Gateway API, disable it and use Ingress instead — see
+> [Exposing the UI](#exposing-the-ui).
 
-On **every source cluster** (agent DaemonSet, dials out):
+### 3. Install the agent on every source cluster
 
 ```bash
 helm install netcat-agent ./charts/netcat \
   --namespace netcat --create-namespace \
   --set controller.enabled=false \
   --set agent.enabled=true \
-  --set agent.hub.enabled=true \
   --set agent.hub.url=https://netcat.example.com \
   --set agent.hub.cluster=prod-eu \
-  --set agent.hub.token=$SHARED_TOKEN
+  --set agent.hub.token="$NETCAT_TOKEN"
 ```
 
-That's it. No kubeconfigs, no API-server access across clusters. Open
-`https://netcat.example.com` and every connected cluster/node will show
-up in the UI.
+`agent.hub.cluster` is whatever display name you want to see for that
+cluster in the UI. Use the same `$NETCAT_TOKEN` on every cluster.
 
-### Kubeconfig mode
+### Keeping the token out of Helm values
 
-On every **source** cluster:
+For anything beyond a scratch install, create the Secret yourself and
+reference it:
 
 ```bash
-helm install netcat-agent ./charts/netcat \
-  --namespace netcat --create-namespace \
-  --set controller.enabled=false \
-  --set agent.enabled=true \
-  --set agent.remoteAccess.enabled=true
+# In every cluster (hub and sources), in the netcat namespace:
+kubectl -n netcat create secret generic netcat-hub-token \
+  --from-literal=token="$NETCAT_TOKEN"
 ```
 
-On the **hub** cluster:
+Then install without the inline token:
 
 ```bash
+# hub
 helm install netcat ./charts/netcat \
-  --namespace netcat --create-namespace \
-  --set agent.enabled=false \
-  --set controller.enabled=true
+  --set agent.enabled=false --set controller.enabled=true \
+  --set controller.hub.existingSecret=netcat-hub-token
+
+# source clusters
+helm install netcat-agent ./charts/netcat \
+  --set controller.enabled=false --set agent.enabled=true \
+  --set agent.hub.url=https://netcat.example.com \
+  --set agent.hub.cluster=prod-eu \
+  --set agent.hub.existingSecret=netcat-hub-token
 ```
 
-Then mint a kubeconfig per remote cluster and load it into the Secret
-the controller mounts. On each remote cluster, point `kubectl` at it,
-`helm install` the agent, then build a kubeconfig from the created SA
-token:
+## Exposing the UI
 
-```bash
-# run on each remote cluster, with kubectl pointing at it
-NAME=prod-eu
-SERVER=$(kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.server}')
-CA=$(kubectl -n netcat get secret netcat-remote-token -o jsonpath='{.data.ca\.crt}')
-TOKEN=$(kubectl -n netcat get secret netcat-remote-token -o jsonpath='{.data.token}' | base64 -d)
-cat > /tmp/kc-$NAME.yaml <<EOF
-apiVersion: v1
-kind: Config
-clusters:  [{name: $NAME, cluster: {server: $SERVER, certificate-authority-data: $CA}}]
-users:     [{name: netcat-remote, user: {token: $TOKEN}}]
-contexts:  [{name: $NAME, context: {cluster: $NAME, user: netcat-remote, namespace: netcat}}]
-current-context: $NAME
-EOF
-```
-
-Then load all the kubeconfigs into the controller's Secret on the hub:
-
-```bash
-kubectl config use-context hub
-kubectl -n netcat create secret generic netcat-kubeconfigs \
-  --from-file=prod-eu=/tmp/kc-prod-eu.yaml \
-  --from-file=prod-us=/tmp/kc-prod-us.yaml \
-  --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n netcat rollout restart deploy/netcat-netcat-controller
-```
-
-The file's key (`prod-eu`, `prod-us`, …) becomes the cluster's display
-name in the UI.
-
-### Exposing the UI
-
-The chart defaults to **HTTPRoute** (Gateway API v1). Point it at an
-existing Gateway with the `parentRefs` value. Example:
+The chart defaults to **HTTPRoute**:
 
 ```yaml
 controller:
@@ -153,8 +112,7 @@ controller:
       - netcat.example.com
 ```
 
-If your cluster doesn't run the Gateway API, disable `httpRoute` and
-use an Ingress instead:
+Or use Ingress instead:
 
 ```yaml
 controller:
@@ -168,7 +126,7 @@ controller:
     tlsSecretName: netcat-tls
 ```
 
-Or, for a quick local check, just port-forward:
+Or just port-forward for local access:
 
 ```bash
 kubectl -n netcat port-forward svc/netcat-netcat-controller 8080:80
@@ -177,89 +135,63 @@ open http://localhost:8080
 
 ## Build images
 
-Images target `linux/amd64` explicitly (Kubernetes node architecture).
-Build with `docker buildx` — works on Apple Silicon too:
+Images target `linux/amd64` (Kubernetes node architecture). Built with
+`docker buildx` — works fine on Apple Silicon hosts too:
 
 ```bash
 make images push REGISTRY=ghcr.io/<you> TAG=v0.1.0
 ```
 
-## Local development
+## Environment variables
 
-Run the controller against your current kube context, no container
-build needed:
+### Controller
 
-```bash
-make run-local
-```
+| Variable           | Default  | Purpose                                        |
+| ------------------ | -------- | ---------------------------------------------- |
+| `LISTEN_ADDR`      | `:8080`  | HTTP bind address                              |
+| `PROBE_TIMEOUT_MS` | `3000`   | Per-probe timeout sent to the agent            |
+| `AGENT_TIMEOUT_MS` | `8000`   | How long to wait for an agent to reply         |
+| `HUB_TOKEN`        | _unset_  | Required bearer token (empty = no auth)        |
 
-Then visit http://localhost:8080. It will show a single cluster named
-after your `kubectl` context, with one row per node where the agent
-DaemonSet is running.
-
-## Environment variables (controller)
-
-| Variable             | Default                   | Purpose                                      |
-| -------------------- | ------------------------- | -------------------------------------------- |
-| `LISTEN_ADDR`        | `:8080`                   | HTTP bind address                            |
-| `AGENT_NAMESPACE`    | `netcat`                  | Namespace where agents run                   |
-| `AGENT_LABEL`        | `app=netcat-agent`        | Label selector for agent pods                |
-| `AGENT_PORT`         | `8080`                    | Port the agent listens on                    |
-| `KUBECONFIG_DIR`     | `/etc/netcat/kubeconfigs` | Directory of per-cluster kubeconfig files    |
-| `LOCAL_CLUSTER_NAME` | `local`                   | Display name for the in-cluster context      |
-| `PROBE_TIMEOUT_MS`   | `3000`                    | Per-probe timeout sent to the agent          |
-| `HTTP_TIMEOUT_MS`    | `8000`                    | Controller → API server / agent timeout      |
-| `HUB_ENABLED`        | _unset_                   | Set to `true` to accept inbound agent tunnels |
-| `HUB_TOKEN`          | _unset_                   | Shared bearer token agents must present      |
-
-## Environment variables (agent)
+### Agent
 
 | Variable      | Default | Purpose                                              |
 | ------------- | ------- | ---------------------------------------------------- |
-| `LISTEN_ADDR` | `:8080` | HTTP bind address                                    |
+| `LISTEN_ADDR` | `:8080` | HTTP bind address (health probes only)               |
 | `NODE_NAME`   |   —     | Downward-API-supplied node id                        |
 | `POD_NAME`    |   —     | Downward-API-supplied pod name (shown in UI)         |
-| `HUB_URL`     | _unset_ | If set, agent dials out and enters hub mode         |
-| `HUB_CLUSTER` | _unset_ | Cluster display name reported to the hub             |
-| `HUB_TOKEN`   | _unset_ | Bearer token sent to the hub (must match controller) |
+| `HUB_URL`     |   —     | Controller URL the agent dials out to                |
+| `HUB_CLUSTER` |   —     | Cluster display name reported to the hub             |
+| `HUB_TOKEN`   |   —     | Bearer token sent to the hub                         |
 
-## How the probe works
+## How a probe works
 
-Agent endpoint (called by the controller via pod-proxy):
+When the user submits a probe in the UI:
 
-```
-POST /check
-{ "host": "api.example.com", "port": 443, "proto": "tcp", "timeout_ms": 3000 }
+1. Browser opens an SSE stream to `GET /api/check?host=…&port=…&proto=…`.
+2. Controller snapshots the set of connected agents and dispatches one
+   job per agent down each SSE tunnel.
+3. Each agent runs the probe in its own node's netns and POSTs the
+   result to `/api/agent/result`.
+4. Controller forwards each result to the browser as soon as it
+   arrives.
 
-→ {
-    "node": "ip-10-0-1-23",
-    "host": "api.example.com",
-    "port": 443,
-    "proto": "tcp",
-    "ok": true,
-    "latency_ms": 14.2,
-    "resolved_ip": "54.12.34.56"
-  }
-```
+Agent probe semantics:
 
-- `tcp`: a full TCP `connect()` (success means the three-way handshake
-  completed).
-- `udp`: best-effort — we can only detect hard local errors and ICMP
-  port-unreachable responses; a successful datagram send does **not**
-  prove the peer received it. Use a real protocol probe for UDP
-  services when correctness matters.
-- DNS resolution happens in the agent's netns (so it reflects the
-  node's DNS setup, not the controller's).
+- `tcp`: a full `connect()` (success means the three-way handshake
+  completed). Reports latency.
+- `udp`: best-effort — can only detect local errors and ICMP
+  port-unreachable responses. A successful datagram send does **not**
+  prove the peer received it.
+- DNS resolution happens in the agent's netns, so it reflects the
+  node's DNS setup.
 
-## UI
+## Security notes
 
-Dark, glassy, streaming. As each node replies the result slides into
-its cluster's card with a success/failure dot and the measured latency.
-
-## Notes
-
-- The `hostNetwork: true` + `hostPort: 8080` combo on the agent means
-  node port 8080 must be free. Remove `hostPort` if you don't want to
-  bind the host — pod-proxy still works without it.
-- RBAC for the controller is minimal: `get`/`list` on `pods` and
-  `get`/`create` on `pods/proxy` in the `netcat` namespace only.
+- The SSE endpoint and result endpoint both require
+  `Authorization: Bearer $HUB_TOKEN`. Leaving the token empty disables
+  authentication; don't do that with a publicly reachable controller.
+- Use TLS on the controller's Ingress/HTTPRoute. The token travels on
+  every agent request — plain HTTP would leak it.
+- Rotate the token by updating the Secret on every cluster and
+  restarting the DaemonSets and controller.
