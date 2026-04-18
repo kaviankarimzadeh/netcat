@@ -2,8 +2,8 @@ apiVersion: v2
 name: netcat
 description: Multi-cluster node-level connectivity probe (agent DaemonSet + controller UI).
 type: application
-version: v0.0.9
-appVersion: "v0.0.9"
+version: v0.0.10
+appVersion: "v0.0.10"
 kubeVersion: ">=1.24.0-0"
 keywords:
   - networking
