@@ -7,6 +7,24 @@ const statFail = $('#statFail');
 const statLatency = $('#statLatency');
 const runBtn = $('#runBtn');
 const clusterChips = $('#clusterChips');
+const themeToggle = $('#themeToggle');
+
+// -------- Theme toggle ----------------------------------------------------
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('netcat:theme', theme); } catch (_) {}
+  if (themeToggle) {
+    themeToggle.setAttribute('aria-pressed', theme === 'light' ? 'true' : 'false');
+    themeToggle.title = theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme';
+  }
+}
+if (themeToggle) {
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+  themeToggle.addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    applyTheme(next);
+  });
+}
 
 let currentSource = null;
 let latencyAcc = 0;
@@ -21,7 +39,7 @@ async function loadClusters() {
       const chip = document.createElement('span');
       chip.className = 'chip';
       const mode = c.mode ? ` · ${c.mode}` : '';
-      chip.innerHTML = `<span class="pulse"></span>${escapeHtml(c.name)} <span style="color:#64748b">· ${c.error ? '!' : c.nodes + ' nodes'}${mode}</span>`;
+      chip.innerHTML = `<span class="pulse"></span>${escapeHtml(c.name)} <span class="chip-meta">· ${c.error ? '!' : c.nodes + ' nodes'}${mode}</span>`;
       if (c.error) chip.title = c.error;
       clusterChips.appendChild(chip);
     }
@@ -49,8 +67,8 @@ function getClusterCard(name) {
         <div class="font-semibold tracking-tight">${escapeHtml(name)}</div>
       </div>
       <div class="flex items-center gap-2 text-xs text-slate-400">
-        <span data-counter="ok"  class="badge" style="color:#34d399">0 ok</span>
-        <span data-counter="bad" class="badge" style="color:#fb7185">0 fail</span>
+        <span data-counter="ok"  class="badge badge-ok">0 ok</span>
+        <span data-counter="bad" class="badge badge-fail">0 fail</span>
       </div>
     </div>
     <div data-rows></div>`;
@@ -63,19 +81,27 @@ function addResult(res) {
   const rows = card.querySelector('[data-rows]');
   const row = document.createElement('div');
   row.className = 'node-row';
+  row.dataset.ok = res.ok ? '1' : '0';
   const latency = res.ok ? `${res.latency_ms.toFixed(1)} ms` : '—';
   const detail = res.ok
-    ? `<span style="color:#94a3b8">${escapeHtml(res.resolved_ip || '')}</span>`
-    : `<span style="color:#fb7185">${escapeHtml(res.error || 'failed')}</span>`;
+    ? `<span class="row-resolved">${escapeHtml(res.resolved_ip || '')}</span>`
+    : `<span class="row-fail">${escapeHtml(res.error || 'failed')}</span>`;
   row.innerHTML = `
     <div class="dot ${res.ok ? 'ok' : 'bad'}"></div>
     <div>
-      <div style="color:#e2e8f0">${escapeHtml(res.node)}</div>
-      <div style="color:#64748b; font-size:0.72rem;">${escapeHtml(res.pod)} · ${escapeHtml(res.proto)}</div>
+      <div class="row-node">${escapeHtml(res.node)}</div>
+      <div class="row-meta">${escapeHtml(res.pod)} · ${escapeHtml(res.proto)}</div>
     </div>
     <div>${detail}</div>
-    <div style="color:#cbd5e1">${latency}</div>`;
-  rows.appendChild(row);
+    <div class="row-latency">${latency}</div>`;
+  // Keep failures pinned to the top: bad rows go before the first ok row,
+  // ok rows get appended to the end.
+  if (res.ok) {
+    rows.appendChild(row);
+  } else {
+    const firstOk = rows.querySelector('[data-ok="1"]');
+    rows.insertBefore(row, firstOk);
+  }
 
   const counterSel = res.ok ? '[data-counter="ok"]' : '[data-counter="bad"]';
   const counter = card.querySelector(counterSel);
@@ -97,12 +123,13 @@ function addClusterError(c) {
   const rows = card.querySelector('[data-rows]');
   const row = document.createElement('div');
   row.className = 'node-row';
+  row.dataset.ok = '0';
   row.innerHTML = `
     <div class="dot bad"></div>
-    <div style="color:#fb7185">cluster unavailable</div>
-    <div style="color:#94a3b8">${escapeHtml(c.error)}</div>
+    <div class="row-fail">cluster unavailable</div>
+    <div class="row-resolved">${escapeHtml(c.error)}</div>
     <div></div>`;
-  rows.appendChild(row);
+  rows.insertBefore(row, rows.firstChild);
 }
 
 function resetResults() {

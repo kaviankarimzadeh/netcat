@@ -1,5 +1,5 @@
 REGISTRY ?= kaviankarimzadeh
-TAG      ?= v0.0.4
+TAG      ?= v0.0.8
 PLATFORM ?= linux/amd64
 
 .DEFAULT_GOAL := help

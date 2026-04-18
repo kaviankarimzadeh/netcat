@@ -12,20 +12,42 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/style.css" />
+    <script>
+      // Apply the saved (or system-preferred) theme before first paint to
+      // avoid a flash of the wrong theme.
+      (function () {
+        try {
+          var saved = localStorage.getItem('netcat:theme');
+          var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+          var theme = saved || (prefersLight ? 'light' : 'dark');
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (_) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
   </head>
-  <body class="min-h-screen text-slate-100">
+  <body class="min-h-screen">
     <div class="bg-aurora fixed inset-0 -z-10"></div>
 
     <main class="mx-auto max-w-6xl px-6 py-10">
-      <header class="mb-10 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-400 to-fuchsia-500 shadow-lg shadow-fuchsia-500/30"></div>
-          <div>
-            <h1 class="text-2xl font-bold tracking-tight">netcat</h1>
-            <p class="text-sm text-slate-400">multi-cluster node-level connectivity probe</p>
-          </div>
+      <header class="mb-10 flex items-center justify-between gap-6">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">netcat</h1>
+          <p class="text-sm text-slate-400">multi-cluster node-level connectivity probe</p>
         </div>
-        <div id="clusterChips" class="flex flex-wrap gap-2"></div>
+        <div class="flex items-center gap-3">
+          <div id="clusterChips" class="flex flex-wrap gap-2"></div>
+          <button id="themeToggle" type="button" class="theme-toggle" aria-label="Toggle color theme" title="Toggle theme">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+            </svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       <section class="glass rounded-2xl p-6 shadow-2xl shadow-black/30">
@@ -59,7 +81,7 @@
             <select
               id="proto"
               name="proto"
-              class="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-slate-100 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40"
+              class="nc-select w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 font-mono text-sm text-slate-100 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40"
             >
               <option value="tcp">TCP</option>
               <option value="udp">UDP</option>

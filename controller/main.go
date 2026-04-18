@@ -192,6 +192,13 @@ func (s *server) handleUI(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "web assets missing: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// The UI assets are embedded in the binary and change on every image
+	// build, so we never want an intermediary CDN (Cloudflare, etc.) to
+	// cache them. Telling the origin to return "no-store" forces CDNs on
+	// "Standard" cache level to always revalidate.
+	w.Header().Set("Cache-Control", "no-store, max-age=0, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	// http.FileServer already serves index.html for a directory request
 	// (including "/"). Rewriting to /index.html here would trigger its
 	// built-in redirect back to "./", causing a client loop.

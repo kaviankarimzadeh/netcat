@@ -1,32 +1,152 @@
+/* -------------------------------------------------------------------------
+   Theme tokens. Dark is the default; `html[data-theme="light"]` flips them.
+   The toggle button lives in the header and stores the choice in
+   localStorage (see app.js).
+   ------------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+  --bg:             #0a0b14;
+  --aurora-1:       rgba(99, 102, 241, 0.35);
+  --aurora-2:       rgba(217, 70, 239, 0.28);
+  --aurora-3:       rgba(14, 165, 233, 0.25);
+
+  --text:           #f1f5f9;
+  --text-muted:     #94a3b8;
+  --text-dim:       #64748b;
+  --text-row:       #e2e8f0;
+  --text-latency:   #cbd5e1;
+
+  --surface-1:      rgba(255, 255, 255, 0.04);
+  --surface-2:      rgba(255, 255, 255, 0.05);
+  --surface-3:      rgba(255, 255, 255, 0.02);
+  --border:         rgba(255, 255, 255, 0.08);
+  --border-soft:    rgba(255, 255, 255, 0.06);
+  --border-row:     rgba(255, 255, 255, 0.04);
+  --border-strong:  rgba(255, 255, 255, 0.12);
+
+  --accent:         #818cf8;
+  --accent-stroke:  "%2394a3b8";   /* select chevron color, URL-encoded */
+  --accent-focus:   "%23818cf8";
+
+  --ok:             #34d399;
+  --fail:           #fb7185;
+
+  --scrollbar:      rgba(255, 255, 255, 0.08);
+
+  --saturate:       1.05;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg:             #f6f7fb;
+  --aurora-1:       rgba(99, 102, 241, 0.18);
+  --aurora-2:       rgba(217, 70, 239, 0.13);
+  --aurora-3:       rgba(14, 165, 233, 0.15);
+
+  --text:           #0f172a;
+  --text-muted:     #475569;
+  --text-dim:       #64748b;
+  --text-row:       #0f172a;
+  --text-latency:   #334155;
+
+  --surface-1:      rgba(15, 23, 42, 0.035);
+  --surface-2:      rgba(15, 23, 42, 0.05);
+  --surface-3:      rgba(15, 23, 42, 0.02);
+  --border:         rgba(15, 23, 42, 0.10);
+  --border-soft:    rgba(15, 23, 42, 0.07);
+  --border-row:     rgba(15, 23, 42, 0.06);
+  --border-strong:  rgba(15, 23, 42, 0.16);
+
+  --accent:         #6366f1;
+  --accent-stroke:  "%23475569";
+  --accent-focus:   "%236366f1";
+
+  --ok:             #059669;
+  --fail:           #e11d48;
+
+  --scrollbar:      rgba(15, 23, 42, 0.15);
+
+  --saturate:       1.0;
+}
+
 html, body {
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background: #0a0b14;
+  background: var(--bg);
+  color: var(--text);
 }
 
 code, pre, .font-mono, input[type="text"], input[type="number"], select {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Override a few Tailwind utilities we use in markup so they track the theme
+   without us having to rewrite every class. */
+html[data-theme="light"] .text-slate-100 { color: var(--text) !important; }
+html[data-theme="light"] .text-slate-400,
+html[data-theme="light"] .text-slate-500 { color: var(--text-muted) !important; }
+html[data-theme="light"] .bg-white\/5    { background-color: var(--surface-2) !important; }
+html[data-theme="light"] .border-white\/10 { border-color: var(--border) !important; }
+html[data-theme="light"] .shadow-black\/30 { --tw-shadow-color: rgba(15, 23, 42, 0.08); box-shadow: var(--tw-shadow) !important; }
+
+/* Hide the spinner arrows on number inputs (port field). */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Custom-styled <select> that matches the text inputs. */
+select.nc-select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'><path d='M1 1.5l5 5 5-5' stroke='%2394a3b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 12px 8px;
+  padding-right: 2.5rem;
+  cursor: pointer;
+}
+html[data-theme="light"] select.nc-select {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'><path d='M1 1.5l5 5 5-5' stroke='%23475569' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+select.nc-select:focus {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'><path d='M1 1.5l5 5 5-5' stroke='%23818cf8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+select.nc-select option {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+html[data-theme="light"] select.nc-select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
 .bg-aurora {
   background:
-    radial-gradient(60rem 40rem at 10% -10%, rgba(99, 102, 241, 0.35), transparent 60%),
-    radial-gradient(50rem 35rem at 110% 10%, rgba(217, 70, 239, 0.28), transparent 60%),
-    radial-gradient(60rem 50rem at 50% 120%, rgba(14, 165, 233, 0.25), transparent 60%),
-    #0a0b14;
-  filter: saturate(1.05);
+    radial-gradient(60rem 40rem at 10% -10%, var(--aurora-1), transparent 60%),
+    radial-gradient(50rem 35rem at 110% 10%, var(--aurora-2), transparent 60%),
+    radial-gradient(60rem 50rem at 50% 120%, var(--aurora-3), transparent 60%),
+    var(--bg);
+  filter: saturate(var(--saturate));
+  transition: background-color 200ms ease;
 }
 
 .glass {
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-3));
+  border: 1px solid var(--border);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
 
 .stat {
   border-radius: 0.75rem;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
   padding: 0.75rem 1rem;
 }
 .stat-label {
@@ -34,19 +154,19 @@ code, pre, .font-mono, input[type="text"], input[type="number"], select {
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 .stat-value {
   margin-top: 0.25rem;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 1.5rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text);
 }
 
 .cluster-card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
-  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-3));
+  border: 1px solid var(--border);
   border-radius: 1rem;
   overflow: hidden;
 }
@@ -55,8 +175,8 @@ code, pre, .font-mono, input[type="text"], input[type="number"], select {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-3);
 }
 .node-row {
   display: grid;
@@ -64,30 +184,38 @@ code, pre, .font-mono, input[type="text"], input[type="number"], select {
   gap: 0.75rem;
   align-items: center;
   padding: 0.75rem 1.25rem;
-  border-top: 1px solid rgba(255,255,255,0.04);
+  border-top: 1px solid var(--border-row);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 0.85rem;
   animation: slideIn 160ms ease-out;
 }
 .node-row:first-child { border-top: none; }
 
+.row-node     { color: var(--text-row); }
+.row-meta     { color: var(--text-dim); font-size: 0.72rem; }
+.row-resolved { color: var(--text-muted); }
+.row-latency  { color: var(--text-latency); }
+.row-fail     { color: var(--fail); }
+
 .dot {
   width: 0.6rem;
   height: 0.6rem;
   border-radius: 999px;
-  box-shadow: 0 0 0 3px rgba(255,255,255,0.03);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.03);
 }
-.dot.ok  { background: #34d399; box-shadow: 0 0 12px rgba(52, 211, 153, 0.6); }
-.dot.bad { background: #fb7185; box-shadow: 0 0 12px rgba(251, 113, 133, 0.6); }
+.dot.ok  { background: var(--ok);   box-shadow: 0 0 12px rgba(52, 211, 153, 0.6); }
+.dot.bad { background: var(--fail); box-shadow: 0 0 12px rgba(251, 113, 133, 0.6); }
 
 .badge {
   font-size: 0.7rem;
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
-  color: #cbd5e1;
-  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-strong);
+  color: var(--text-row);
+  background: var(--surface-1);
 }
+.badge-ok   { color: var(--ok); }
+.badge-fail { color: var(--fail); }
 
 .chip {
   display: inline-flex;
@@ -95,17 +223,45 @@ code, pre, .font-mono, input[type="text"], input[type="number"], select {
   gap: 0.4rem;
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   font-size: 0.75rem;
-  color: #cbd5e1;
+  color: var(--text-row);
 }
+.chip-meta { color: var(--text-dim); }
 .chip .pulse {
   width: 6px; height: 6px; border-radius: 999px;
-  background: #818cf8;
+  background: var(--accent);
   box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.6);
   animation: pulse 1.6s infinite;
 }
+
+/* -------- Theme toggle button ------------------------------------------ */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+.theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.theme-toggle:active { transform: scale(0.94); }
+.theme-toggle svg { width: 1.1rem; height: 1.1rem; }
+
+/* Show one icon at a time depending on theme. */
+.theme-toggle .icon-sun  { display: none; }
+.theme-toggle .icon-moon { display: block; }
+html[data-theme="light"] .theme-toggle .icon-sun  { display: block; }
+html[data-theme="light"] .theme-toggle .icon-moon { display: none; }
 
 @keyframes pulse {
   0%   { box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.6); }
@@ -119,5 +275,5 @@ code, pre, .font-mono, input[type="text"], input[type="number"], select {
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 999px; }
 ::-webkit-scrollbar-track { background: transparent; }
