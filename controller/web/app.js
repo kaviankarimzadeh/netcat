@@ -67,10 +67,13 @@ function getClusterCard(name) {
   card = document.createElement('div');
   card.className = 'cluster-card';
   card.dataset.cluster = name;
-  card.dataset.collapsed = '0';
+  // Cards start collapsed; we auto-expand them the moment a failure
+  // (or cluster-level error) is recorded, so the default view is
+  // "everything is fine, nothing to look at — click to drill in".
+  card.dataset.collapsed = '1';
   card.dataset.hasFail = '0';
   card.innerHTML = `
-    <button type="button" class="cluster-header" aria-expanded="true">
+    <button type="button" class="cluster-header" aria-expanded="false">
       <div class="flex items-center gap-3">
         ${CARET_SVG}
         <div class="h-2.5 w-2.5 rounded-full bg-indigo-400 shadow-[0_0_10px_rgba(129,140,248,0.7)]"></div>
@@ -155,7 +158,11 @@ function addResult(res) {
   const n = parseInt(counter.textContent, 10) + 1;
   counter.textContent = `${n} ${res.ok ? 'ok' : 'fail'}`;
 
-  if (!res.ok) card.dataset.hasFail = '1';
+  if (!res.ok) {
+    card.dataset.hasFail = '1';
+    // Auto-expand on first failure so the user sees it live.
+    if (card.dataset.collapsed === '1') toggleCard(card, false);
+  }
 
   if (res.ok) {
     statOk.textContent = parseInt(statOk.textContent, 10) + 1;
@@ -170,6 +177,7 @@ function addResult(res) {
 function addClusterError(c) {
   const card = getClusterCard(c.cluster);
   card.dataset.hasFail = '1';
+  toggleCard(card, false);
   const rows = card.querySelector('[data-rows]');
   const row = document.createElement('div');
   row.className = 'node-row';
@@ -220,16 +228,9 @@ function run(host, port, proto) {
     currentSource = null;
     runBtn.disabled = false;
     runBtn.textContent = 'Probe';
-    // Once the run finishes, collapse any cluster with zero failures so
-    // the screen focuses on what actually went wrong. If everything is
-    // green across the board, keep the first card expanded so the user
-    // still sees some detail.
-    const cards = [...document.querySelectorAll('.cluster-card')];
-    const anyFail = cards.some((c) => c.dataset.hasFail === '1');
-    cards.forEach((c) => {
-      const healthy = c.dataset.hasFail !== '1';
-      toggleCard(c, anyFail ? healthy : false);
-    });
+    // By now any cluster with a failure already auto-expanded itself
+    // via addResult/addClusterError. Everything green stays collapsed —
+    // user can still open it manually from the header or via Expand all.
   });
   es.onerror = () => {
     es.close();
