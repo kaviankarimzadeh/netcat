@@ -42,10 +42,12 @@ agent:
   hostNetwork: true
   dnsPolicy: ClusterFirstWithHostNet
 
-  # Bind agent port on the node. Set to 0 to skip hostPort entirely.
-  # The agent's HTTP endpoint is only used for health probes now that
-  # all control traffic flows through the outbound SSE connection.
-  hostPort: 8080
+  # The agent is a pure client of the controller: it dials out for the SSE
+  # job stream and POSTs results back. Nothing ever dials into the agent's
+  # HTTP port — only the kubelet liveness probe, which goes through the
+  # pod network and doesn't need a hostPort. Leave this at 0 unless you
+  # specifically want the agent's /healthz exposed on the node's IP.
+  hostPort: 0
   port: 8080
   listenAddr: ":8080"
 

@@ -1,10 +1,7 @@
-// Agent runs as a DaemonSet on every node. It exposes a small HTTP API
-// that performs TCP (and optionally UDP) reachability probes from the
-// node's own network namespace.
-//
-// If HUB_URL is set, the agent additionally dials outbound to a
-// controller and keeps an SSE connection open to receive probe jobs —
-// no Kubernetes API access from the controller side required.
+// Agent runs as a DaemonSet on every node. It dials outbound to the
+// controller, keeps an SSE connection open, runs probe jobs pushed down
+// that stream, and POSTs the results back. The only HTTP endpoint the
+// agent itself exposes is /healthz for the kubelet liveness probe.
 package main
 
 import (
@@ -24,22 +21,25 @@ import (
 	"time"
 )
 
-type checkRequest struct {
-	Host    string `json:"host"`
-	Port    int    `json:"port"`
-	Proto   string `json:"proto,omitempty"`   // "tcp" (default) or "udp"
-	TimeoutMs int  `json:"timeout_ms,omitempty"`
+// probeRequest / probeResult are internal only; nothing is serialized over
+// the wire with these types anymore. The hub wire format lives in
+// hubJobMsg / hubResultMsg below.
+type probeRequest struct {
+	Host      string
+	Port      int
+	Proto     string
+	TimeoutMs int
 }
 
-type checkResponse struct {
-	Node       string  `json:"node"`
-	Host       string  `json:"host"`
-	Port       int     `json:"port"`
-	Proto      string  `json:"proto"`
-	OK         bool    `json:"ok"`
-	LatencyMs  float64 `json:"latency_ms"`
-	Error      string  `json:"error,omitempty"`
-	ResolvedIP string  `json:"resolved_ip,omitempty"`
+type probeResult struct {
+	Node       string
+	Host       string
+	Port       int
+	Proto      string
+	OK         bool
+	LatencyMs  float64
+	Error      string
+	ResolvedIP string
 }
 
 func nodeName() string {
@@ -60,14 +60,14 @@ func resolve(host string) string {
 	return ips[0].String()
 }
 
-func probe(req checkRequest) checkResponse {
+func probe(req probeRequest) probeResult {
 	if req.Proto == "" {
 		req.Proto = "tcp"
 	}
 	if req.TimeoutMs <= 0 {
 		req.TimeoutMs = 3000
 	}
-	resp := checkResponse{
+	resp := probeResult{
 		Node:  nodeName(),
 		Host:  req.Host,
 		Port:  req.Port,
@@ -111,34 +111,6 @@ func probe(req checkRequest) checkResponse {
 		resp.Error = "unsupported proto: " + req.Proto
 	}
 	return resp
-}
-
-func handleCheck(w http.ResponseWriter, r *http.Request) {
-	var req checkRequest
-	switch r.Method {
-	case http.MethodGet:
-		q := r.URL.Query()
-		req.Host = q.Get("host")
-		req.Port, _ = strconv.Atoi(q.Get("port"))
-		req.Proto = q.Get("proto")
-		req.TimeoutMs, _ = strconv.Atoi(q.Get("timeout_ms"))
-	case http.MethodPost:
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "bad json: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if req.Host == "" || req.Port <= 0 || req.Port > 65535 {
-		http.Error(w, "host and port (1-65535) are required", http.StatusBadRequest)
-		return
-	}
-
-	out := probe(req)
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
 }
 
 func handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -247,7 +219,7 @@ func hubConnect(hubURL, token, cluster, pod string) error {
 }
 
 func hubRunJob(hubURL, token, cluster, pod string, j hubJobMsg) {
-	res := probe(checkRequest{
+	res := probe(probeRequest{
 		Host:      j.Host,
 		Port:      j.Port,
 		Proto:     j.Proto,
@@ -296,7 +268,6 @@ func main() {
 		addr = ":8080"
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/check", handleCheck)
 	mux.HandleFunc("/healthz", handleHealth)
 
 	hubURL := os.Getenv("HUB_URL")
