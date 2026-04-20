@@ -8,6 +8,13 @@ const statLatency = $('#statLatency');
 const runBtn = $('#runBtn');
 const clusterChips = $('#clusterChips');
 const themeToggle = $('#themeToggle');
+const resultsToolbar = $('#resultsToolbar');
+const resultsCount = $('#resultsCount');
+const failOnly = $('#failOnly');
+const expandAllBtn = $('#expandAll');
+const collapseAllBtn = $('#collapseAll');
+
+const CARET_SVG = `<svg class="cluster-caret" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8l4 4 4-4"/></svg>`;
 
 // -------- Theme toggle ----------------------------------------------------
 function applyTheme(theme) {
@@ -60,9 +67,12 @@ function getClusterCard(name) {
   card = document.createElement('div');
   card.className = 'cluster-card';
   card.dataset.cluster = name;
+  card.dataset.collapsed = '0';
+  card.dataset.hasFail = '0';
   card.innerHTML = `
-    <div class="cluster-header">
+    <button type="button" class="cluster-header" aria-expanded="true">
       <div class="flex items-center gap-3">
+        ${CARET_SVG}
         <div class="h-2.5 w-2.5 rounded-full bg-indigo-400 shadow-[0_0_10px_rgba(129,140,248,0.7)]"></div>
         <div class="font-semibold tracking-tight">${escapeHtml(name)}</div>
       </div>
@@ -70,11 +80,48 @@ function getClusterCard(name) {
         <span data-counter="ok"  class="badge badge-ok">0 ok</span>
         <span data-counter="bad" class="badge badge-fail">0 fail</span>
       </div>
-    </div>
+    </button>
     <div data-rows></div>`;
+  card.querySelector('.cluster-header').addEventListener('click', () => toggleCard(card));
   results.appendChild(card);
+  updateResultsToolbar();
   return card;
 }
+
+function toggleCard(card, forceCollapsed) {
+  const next = typeof forceCollapsed === 'boolean'
+    ? (forceCollapsed ? '1' : '0')
+    : (card.dataset.collapsed === '1' ? '0' : '1');
+  card.dataset.collapsed = next;
+  const header = card.querySelector('.cluster-header');
+  if (header) header.setAttribute('aria-expanded', next === '1' ? 'false' : 'true');
+}
+
+function setAllCollapsed(collapsed) {
+  document.querySelectorAll('.cluster-card').forEach((c) => toggleCard(c, collapsed));
+}
+
+function updateResultsToolbar() {
+  const n = document.querySelectorAll('.cluster-card').length;
+  if (!resultsToolbar) return;
+  if (n === 0) {
+    resultsToolbar.classList.add('hidden');
+    resultsToolbar.classList.remove('flex');
+  } else {
+    resultsToolbar.classList.remove('hidden');
+    resultsToolbar.classList.add('flex');
+    if (resultsCount) resultsCount.textContent = `${n} cluster${n === 1 ? '' : 's'}`;
+  }
+}
+
+if (failOnly) {
+  failOnly.addEventListener('change', () => {
+    if (failOnly.checked) results.setAttribute('data-filter', 'fail');
+    else results.removeAttribute('data-filter');
+  });
+}
+if (expandAllBtn)   expandAllBtn.addEventListener('click',   () => setAllCollapsed(false));
+if (collapseAllBtn) collapseAllBtn.addEventListener('click', () => setAllCollapsed(true));
 
 function addResult(res) {
   const card = getClusterCard(res.cluster);
@@ -108,6 +155,8 @@ function addResult(res) {
   const n = parseInt(counter.textContent, 10) + 1;
   counter.textContent = `${n} ${res.ok ? 'ok' : 'fail'}`;
 
+  if (!res.ok) card.dataset.hasFail = '1';
+
   if (res.ok) {
     statOk.textContent = parseInt(statOk.textContent, 10) + 1;
     latencyAcc += res.latency_ms;
@@ -120,6 +169,7 @@ function addResult(res) {
 
 function addClusterError(c) {
   const card = getClusterCard(c.cluster);
+  card.dataset.hasFail = '1';
   const rows = card.querySelector('[data-rows]');
   const row = document.createElement('div');
   row.className = 'node-row';
@@ -134,6 +184,8 @@ function addClusterError(c) {
 
 function resetResults() {
   results.innerHTML = '';
+  results.removeAttribute('data-filter');
+  if (failOnly) failOnly.checked = false;
   statTargets.textContent = '0';
   statOk.textContent = '0';
   statFail.textContent = '0';
@@ -142,6 +194,7 @@ function resetResults() {
   latencyCount = 0;
   summary.classList.remove('hidden');
   summary.classList.add('grid');
+  updateResultsToolbar();
 }
 
 function run(host, port, proto) {
@@ -167,6 +220,16 @@ function run(host, port, proto) {
     currentSource = null;
     runBtn.disabled = false;
     runBtn.textContent = 'Probe';
+    // Once the run finishes, collapse any cluster with zero failures so
+    // the screen focuses on what actually went wrong. If everything is
+    // green across the board, keep the first card expanded so the user
+    // still sees some detail.
+    const cards = [...document.querySelectorAll('.cluster-card')];
+    const anyFail = cards.some((c) => c.dataset.hasFail === '1');
+    cards.forEach((c) => {
+      const healthy = c.dataset.hasFail !== '1';
+      toggleCard(c, anyFail ? healthy : false);
+    });
   });
   es.onerror = () => {
     es.close();
